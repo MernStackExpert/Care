@@ -1,66 +1,108 @@
 "use client";
 import { useState, useEffect } from "react";
-import { db } from "@/lib/firebase"; 
-import { addDoc, collection } from "firebase/firestore";
+import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
-export default function BookingPage({ params }) {
+const BookingPage = ({ params }) => {
+  const { id } = params;
+  const [services, setServices] = useState([]);
+  const [service, setService] = useState(null);
+  const [user, setUser] = useState(null);
   const [duration, setDuration] = useState(1);
-  const [location, setLocation] = useState({ division: "", district: "", city: "", area: "", address: "" });
-  const serviceCharge = 500; 
-  const totalCost = duration * serviceCharge;
+  const [location, setLocation] = useState("");
+  const [totalCost, setTotalCost] = useState(0);
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (!currentUser) router.push("/login");
+      else setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/services")
+      .then(res => res.json())
+      .then(data => setServices(data));
+  }, []);
+
+  useEffect(() => {
+    if (services.length > 0) {
+      const selectedService = services.find(s => s._id.toString() === id);
+      if (!selectedService) router.push("/404");
+      else {
+        setService(selectedService);
+        setTotalCost(selectedService.price);
+      }
+    }
+  }, [services, id]);
+
+  useEffect(() => {
+    if (service) setTotalCost(service.price * duration);
+  }, [duration, service]);
 
   const handleBooking = async () => {
-    try {
-      const docRef = await addDoc(collection(db, "bookings"), {
-        serviceId: params.id,
+    const res = await fetch("/api/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        serviceId: service._id,
+        userId: user.uid,
         duration,
         location,
         totalCost,
-        status: "Pending",
-        createdAt: new Date(),
-      });
-      
-      await fetch('/api/send-invoice', {
-        method: 'POST',
-        body: JSON.stringify({ email: "user@email.com", totalCost, serviceName: params.id })
-      });
+        status: "Pending"
+      })
+    });
 
-      alert("Booking Successful!");
-    } catch (e) {
-      console.error("Error adding document: ", e);
-    }
+    const data = await res.json();
+    if (res.ok) router.push("/my-bookings");
+    else alert(data.message);
   };
 
-  return (
-    <div className="p-10">
-      <h1 className="text-2xl font-bold">Book Service: {params.id}</h1>
-      
-      <div className="mt-5 space-y-4">
-        <input 
-          type="number" 
-          placeholder="Duration (Hours)" 
-          className="border p-2 w-full"
-          onChange={(e) => setDuration(e.target.value)}
-        />
-        
-        <input 
-          type="text" 
-          placeholder="Full Address" 
-          className="border p-2 w-full"
-          onChange={(e) => setLocation({...location, address: e.target.value})}
-        />
+  if (!service) return <p className="text-center py-10">Loading service...</p>;
 
-        <div className="bg-gray-100 p-4 rounded">
-          <p className="text-lg">Total Cost: <strong>{totalCost} BDT</strong></p>
+  return (
+    <section className="py-10 container mx-auto px-4">
+      <div className="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-lg">
+        <h1 className="text-3xl font-bold mb-4">{service.name}</h1>
+        <p className="text-gray-500 mb-6">{service.description}</p>
+        <p className="text-lg font-bold mb-6">Price per unit: {service.price} ৳</p>
+
+        <div className="mb-4">
+          <label className="font-bold mb-2 block">Duration (days/hours)</label>
+          <input
+            type="number"
+            min={1}
+            value={duration}
+            onChange={(e) => setDuration(Number(e.target.value))}
+            className="w-full p-3 border rounded-xl"
+          />
         </div>
 
-        <button 
+        <div className="mb-4">
+          <label className="font-bold mb-2 block">Location / Address</label>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            className="w-full p-3 border rounded-xl"
+          />
+        </div>
+
+        <p className="font-bold mb-4">Total Cost: {totalCost} ৳</p>
+
+        <button
           onClick={handleBooking}
-          className="bg-blue-600 text-white px-6 py-2 rounded"
+          className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700"
         >
           Confirm Booking
         </button>
       </div>
-    </div>
+    </section>
   );
-}
+};
+
+export default BookingPage;
