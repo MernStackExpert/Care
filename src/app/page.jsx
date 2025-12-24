@@ -1,9 +1,11 @@
 "use client";
-import About from '@/componants/Home/About';
-import Hero from '@/componants/Home/Hero';
-import ServicesHome from '@/componants/Home/ServicesHome';
-import Testimonials from '@/componants/Home/Testimonials';
+
 import React from 'react';
+
+import About from '@/components/About';
+import ServicesHome from '@/components/ServicesHome';
+import Testimonials from '@/components/Testimonials';
+import Hero from '@/components/Hero';
 
 const Home = () => {
   return (
